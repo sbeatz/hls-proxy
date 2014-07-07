@@ -103,7 +103,8 @@ class HTTPPlayer:
             with open(filepath, 'rb') as f:
                 for chunk in iter(partial(f.read, 1024), ''):
                   self._http_handler.wfile.write(chunk)
-                  count += 1024                  
+                  count += 1024 
+            os.remove(filepath)
                 
         except:
             print("Connection closed")
