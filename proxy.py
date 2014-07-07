@@ -97,16 +97,13 @@ class HTTPPlayer:
         try:
             size = os.path.getsize(filepath)
             print str(size)
-            count = 0
-            requested = False
+            count = 0            
+            self._on_about_to_finish()
+            
             with open(filepath, 'rb') as f:
                 for chunk in iter(partial(f.read, 1024), ''):
                   self._http_handler.wfile.write(chunk)
-                  count += 1024
-                  if count/size>0.6 and not requested:
-                      self._on_about_to_finish()
-                      requested = True
-                  
+                  count += 1024                  
                 
         except:
             print("Connection closed")
