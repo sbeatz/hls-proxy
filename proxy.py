@@ -19,7 +19,10 @@ import sys
 import os
 import argparse
 
+from twisted.web import server, resource
+from twisted.web.server import NOT_DONE_YET
 from twisted.internet import reactor
+
 
 from fetcher import HLSFetcher
 from m3u8 import M3U8
@@ -72,15 +75,22 @@ class HLSControler:
         d.addCallback(self.player.set_uri)
 
     def on_player_about_to_finish(self):
-        reactor.callFromThread(self._set_next_uri)
+        if not self.player._request._disconnected:
+            reactor.callFromThread(self._set_next_uri)
+        else:
+            self.fetcher.stop()
+            self._start = None
+            del self.fetcher
+            del self.player
+            
 
 class HTTPPlayer:
-    def __init__(self, handler):
+    def __init__(self, request):
         print "Starting player"
         self._playing = False
         self._need_data = False
         self._cb = None
-        self._http_handler = handler
+        self._request = request
 
     def need_data(self):
         print "need"
@@ -94,23 +104,21 @@ class HTTPPlayer:
         self._playing = False
 
     def set_uri(self, filepath):
-        try:
-            size = os.path.getsize(filepath)
-            print str(size)
-            count = 0            
-            self._on_about_to_finish()
-            
-            with open(filepath, 'rb') as f:
-                for chunk in iter(partial(f.read, 1024), ''):
-                  self._http_handler.wfile.write(chunk)
+        size = os.path.getsize(filepath)
+        print str(size)
+        count = 0            
+        self._on_about_to_finish()
+        
+        with open(filepath, 'rb') as f:
+            for chunk in iter(partial(f.read, 1024), ''):
+              if not self._request._disconnected:
+                  self._request.write(str(chunk))
                   count += 1024 
-            os.remove(filepath)
-                
-        except:
-            print("Connection closed")
-            self.stop()
-            reactor.stop()
-         
+              else:
+                  self.stop()
+                  
+                  break
+        os.remove(filepath)         
 
     def on_message(self, bus, message):
         print "msg"
@@ -137,39 +145,24 @@ class HTTPPlayer:
         self._cb = cb
 
 
-
-class Handler(BaseHTTPRequestHandler):
-
-    def do_GET(self):
       
-        self.send_response(200)
-        self.send_header('Content-Type', "video/mpeg")
-        self.end_headers()
-        message =  threading.currentThread().getName()
-        #self.wfile.write(message)
-        
-        args = urlparse.parse_qs(urlparse.urlparse(self.path).query)
-        
-        if 'url' in args:
-          url = args['url'][0]
-          print "URL: "+url
-          c = HLSControler(HLSFetcher(url))
-          p = HTTPPlayer(self)
-          c.set_player(p)
-          c.start()
-          reactor.addSystemEventTrigger('before', 'shutdown', quit_server) #workaround!
-          reactor.run()
-          
-        else:
-          pass
-        
-        
-        reactor.stop()
-        exit(0)
-        
 def quit_server(): #workaround
     os.system("kill -9 "+str(os.getpid()))
-        
+
+
+class HLSProxy(resource.Resource):
+    isLeaf = True
+    
+    def render_GET(self, request):
+        if 'url' in request.args:
+          url = request.args['url'][0]
+          c = HLSControler(HLSFetcher(url))
+          p = HTTPPlayer(request)
+          c.set_player(p)
+          c.start()
+          return NOT_DONE_YET
+          
+          
         
 
 class ThreadedHTTPServer(HTTPServer, ThreadingMixIn):
@@ -177,12 +170,19 @@ class ThreadedHTTPServer(HTTPServer, ThreadingMixIn):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument("-p", "--port", type=int, dest="port", required=True, 
+    parser.add_argument("-p", "--port", type=int, dest="port", required=False, 
                         metavar="PORT", default=8081, help="Port")
     args = parser.parse_args()
     
-    server = ThreadedHTTPServer(('', args.port), Handler)
-    print 'Starting server, use <Ctrl-C> to stop'
-    server.serve_forever()
+    #server = ThreadedHTTPServer(('', args.port), Handler)
+    
+
+    print 'Starting server on port '+str(args.port)+', use <Ctrl-C> to stop'
+    site = server.Site(HLSProxy())
+    reactor.listenTCP(args.port, site)
+    reactor.run()
+    
+    
+    #server.serve_forever()
     
     

@@ -41,7 +41,8 @@ class HLSFetcher(object):
         self._file_playlist = None
         self._cookies = {}
         self._cached_files = {}
-
+        self._run = True
+        
         self._files = None # the iter of the playlist files download
         self._next_download = None # the delayed download defer, if any
         self._file_playlisted = None # the defer to wait until new files are added to playlist
@@ -124,7 +125,7 @@ class HLSFetcher(object):
     def _handle_end(self, failure):
         failure.trap(StopIteration)
         print "End of media"
-        reactor.stop()
+        #reactor.stop()
 
     def _get_files_loop(self, last_file=None):
         if last_file:
@@ -171,10 +172,13 @@ class HLSFetcher(object):
         return d
 
     def _reload_playlist(self, pl):
-        d = self._fetch_playlist(pl)
-        d.addCallback(self._got_playlist_content, pl)
-        d.addCallback(self._playlist_updated)
-        return d
+        if self._run:
+            d = self._fetch_playlist(pl)
+            d.addCallback(self._got_playlist_content, pl)
+            d.addCallback(self._playlist_updated)
+            return d
+        else:
+            return None
 
     def get_file(self, sequence):
         d = defer.Deferred()
@@ -198,5 +202,7 @@ class HLSFetcher(object):
         return self._new_filed
 
     def stop(self):
-        pass
+        print "Canceling deferreds"
+        self._run = False
+        self._new_filed.cancel()
 
