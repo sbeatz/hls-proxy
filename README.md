@@ -13,13 +13,6 @@ Usage:
 - mplayer http://localhost:PORT/?url=http://YOUR_HLS_URL 
 
 
-
-Limitations:
-
-- It does not yet support multiple sessions. In fact, you have to restart the proxy after each usage (Reactor is not restartable).
-
-
-
 Requirements:
 
 - python-twisted
