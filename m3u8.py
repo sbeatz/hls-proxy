@@ -14,12 +14,12 @@
 
 import logging
 import re
+import urllib2
 
 class M3U8(object):
 
     def __init__(self, url=None):
         self.url = url
-
         self._programs = [] # main list of programs & bandwidth
         self._files = {} # the current program playlist
         self._first_sequence = None # the first sequence to start fetching
@@ -28,6 +28,9 @@ class M3U8(object):
         self._update_tries = None # the number consecutive reload tries
         self._last_content = None
         self._endlist = False # wether the list ended and should not be refreshed
+        self._encryption_method = None
+        self._key_url = None
+        self._key = None
 
     def endlist(self):
         return self._endlist
@@ -141,6 +144,12 @@ class M3U8(object):
                 print l
             elif l.startswith('#EXT-X-ALLOW-CACHE'):
                 allow_cache = l[19:]
+            elif l.startswith('#EXT-X-KEY'):
+                self._encryption_method = l.split(',')[0][18:]
+                self._key_url = l.split(',')[1][5:-1]
+                response = urllib2.urlopen(self._key_url)
+                self._key = response.read()
+                response.close()
             elif l.startswith('#EXTINF'):
                 v = l[8:].split(',')
                 d = dict(file=self._lines.next().strip(),

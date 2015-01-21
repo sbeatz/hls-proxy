@@ -25,6 +25,10 @@ from twisted.internet.task import deferLater
 
 from m3u8 import M3U8
 
+from Crypto.Cipher import AES
+import struct
+
+
 class HLSFetcher(object):
 
     def __init__(self, url, path=None, referer=None, bitrate=200000, keep=-1, program=1):
@@ -70,7 +74,11 @@ class HLSFetcher(object):
         d = self._get_page(url)
         f = open(path, 'w')
         d.addCallback(_check)
-        d.addCallback(lambda x: f.write(x))
+        if self._file_playlist._key:
+          aes = AES.new(self._file_playlist._key, AES.MODE_CBC, struct.pack(">IIII", 0x0, 0x0, 0x0, 16))
+          d.addCallback(lambda x: f.write(aes.decrypt(x)))
+        else:
+          d.addCallback(lambda x: f.write(x))
         d.addBoth(lambda _: f.close())
         d.addCallback(lambda _: path)
         return d
