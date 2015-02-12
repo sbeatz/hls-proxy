@@ -156,7 +156,11 @@ class HLSProxy(resource.Resource):
     def render_GET(self, request):
         if 'url' in request.args:
           url = request.args['url'][0]
-          c = HLSControler(HLSFetcher(url))
+          if 'bitrate' in request.args:
+            br = int(request.args['bitrate'][0])
+          else:
+            br = 200000
+          c = HLSControler(HLSFetcher(url, bitrate=br))
           p = HTTPPlayer(request)
           c.set_player(p)
           c.start()
